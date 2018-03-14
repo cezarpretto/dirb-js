@@ -2,11 +2,24 @@
 const axios = require('axios')
 const fs = require('fs')
 const queue = require('queue')
-const questions = require('./Questions')
+const commander = require('commander')
+const version = require('./package.json').version
+const chalk = require('chalk')
+const log = require('chalk-log')
+const ora = require('ora')
 
-questions.ask().then(answers => {
-  const URL = answers.url
-  let q = queue({concurrency: answers.numberOfThreads})
+const spinner = ora('Work in progress')
+
+commander
+  .version(version)
+  .option('-u, --url <url>', 'Base URL')
+  .option('-r, --recursive', 'Set recursive mode')
+  .option('-c, --concurrency <number>', 'Number of proccess at the same time. Default: 1')
+  .parse(process.argv)
+
+if (commander.url) {
+  const URL = commander.url.replace(/\/(?=[^\,/]*$)?$/, '')
+  let q = queue({concurrency: commander.concurrency || 1})
 
   let found = []
   const wordsList = fs.readdirSync('./wordlists')
@@ -20,25 +33,31 @@ questions.ask().then(answers => {
     }
   }
 
+  spinner.start()
+
   const fetch = (url, word) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const urlFetch = `${url}/${word}`
-      axios({
-        url: urlFetch,
-        method: 'get',
-        maxRedirects: 0,
-        validateStatus: (status) => {
-          return status >= 200 && status < 300
-        }
-      }).then(response => {
-        console.log(urlFetch)
-        if (answers.recursive) {
+      try {
+        log.progress(urlFetch)
+        const response = await axios({
+          url: urlFetch,
+          method: 'get',
+          maxRedirects: 0,
+          validateStatus: (status) => {
+            return status >= 200 && status < 300
+          }
+        })
+        if (!!commander.recursive) {
           pushWords(urlFetch)
         }
+        log.clear()
+        console.log(chalk.green(`${urlFetch} - ${chalk.white.bgGreen.bold(`STATUS [${response.status}]`)}`))
+      } catch (e) {
+        log.clear()
+      } finally {
         resolve()
-      }).catch(() => {
-        resolve()
-      })
+      }
     })
   }
 
@@ -47,8 +66,6 @@ questions.ask().then(answers => {
   console.log('Starting Queue');
   q.start()
   q.on('end', (result, job) => {
-    console.log('END')
+    spinner.succeed('Finished')
   })
-}).catch(err => {
-  console.error(err)
-})
+}
