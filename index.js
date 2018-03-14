@@ -22,7 +22,7 @@ if (commander.url) {
   let q = queue({concurrency: commander.concurrency || 1})
 
   let found = []
-  const wordsList = fs.readdirSync('./wordlists')
+  const wordsList = fs.readdirSync(`${__dirname}/wordlists`)
   .map(x => `./wordlists/${x}`)
   .map(x => fs.readFileSync(x, 'utf8').split('\n'))
   .reduce((prev, curr) => [...prev, ...curr], [])
